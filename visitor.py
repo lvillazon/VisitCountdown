@@ -7,12 +7,13 @@
     L Villazon 7th May 2022
 '''
 
-import sys, pygame, os, time
+import sys, pygame, os, time, math
 from datetime import timedelta
 from enum import Enum
 
 
 # define values for the finite state machine
+
 class State(Enum):
     RUN = 1
     SET_VISIT = 2
@@ -29,7 +30,8 @@ class Corner(Enum):
     MIDDLE = 0
 
 class Countdown():
-    def __init__(self, screen):
+    def __init__(self, screen, size):
+        self.size = size
         self.screen = screen
         self.next_visit_time = self.get_next_visit_time()
         self.tap_sequence = []  # holds the sequence of corner taps used to switch states
@@ -37,6 +39,7 @@ class Countdown():
         self.number_font = pygame.font.Font(None, NUMBER_SIZE)
         self.unit_font = pygame.font.Font(None, UNIT_SIZE)
         self.date_font = pygame.font.Font(None, DATE_SIZE)
+        self.date_time_font = pygame.font.Font(None, DATE_TIME_SIZE)
 
     def display_countdown(self):
         # render the days remaining to the screen
@@ -45,9 +48,8 @@ class Countdown():
 
         # top left of the display text
         # TODO add drift, to prevent screen burn
-        xpos = time.monotonic() % 100
-        print(xpos)
-        ypos = 50
+        xpos = 60 + 60 * math.cos(math.radians((time.monotonic() % 3600) // 10))
+        ypos = 130 + 80 * math.sin(math.radians((time.monotonic() % 3600) // 10))
 
         self.screen.fill(BACKGROUND_COLOR)
         days_to_go = int(self.days_until(self.next_visit_time))
@@ -62,6 +64,12 @@ class Countdown():
             countdown_unit = self.unit_font.render(" days", False, FONT_COLOR)
             self.screen.blit(countdown_number, (xpos, ypos))
             self.screen.blit(countdown_unit, (xpos + countdown_number.get_width(), ypos + UNIT_Y_OFFSET))
+
+        # display the actual date/time as well
+        current_date_time = self.date_time_font.render(time.strftime('%a %d %b %H:%M'), False, FONT_COLOR)
+        self.screen.blit(current_date_time,(xpos, ypos - 20))
+
+
         pygame.display.flip()
 
     def display_visit(self):
@@ -117,8 +125,8 @@ class Countdown():
         # if coords is sufficiently close to one of the screen corners,
         # return the corner enum, otherwise we return the 'middle' enum
         sensitivity = 0.25
-        width = pygame.display.get_window_size()[0]
-        height = pygame.display.get_window_size()[1]
+        width = self.size[0]
+        height = self.size[1]
         if coords[0] < width*sensitivity and coords[1] <height*sensitivity:
             return Corner.TOP_LEFT
         elif coords[0] < width * sensitivity and coords[1] > height * (1-sensitivity):
@@ -137,6 +145,7 @@ class Countdown():
         # if none is detected, we stay in run mode
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                #pygame.mouse.set_visible(True)
                 mouse_pos = self.get_corner(pygame.mouse.get_pos())
                 self.tap_sequence.append(mouse_pos)
                 self.tap_timeout = time.monotonic() + 1  # one second
@@ -150,6 +159,7 @@ class Countdown():
         elif time.monotonic() > self.tap_timeout:
             self.tap_sequence = []
         else:
+            #pygame.mouse.set_visible(False)
             return State.RUN
 
     def set_visit(self):
@@ -177,13 +187,14 @@ print("VCC starting up...")
 #DEPLOY = "Win"  # switch between windows and pi screen sizes
 DEPLOY = "pi"
 
-SIZE = (0, 0)  # use screen resolution for window size
+SIZE = (800, 480)  # use screen resolution for window size
 FLAGS = pygame.FULLSCREEN
 BACKGROUND_COLOR = (0, 0, 0)
 FONT_COLOR = (255, 0, 0)
 NUMBER_SIZE = 400
 UNIT_SIZE = 200
 DATE_SIZE = 150
+DATE_TIME_SIZE = 30
 UNIT_Y_OFFSET = 120
 CONFIG_FILE = "visit_countdown.cfg"
 QUIT_CODE = [Corner.TOP_RIGHT, Corner.TOP_RIGHT, Corner.BOTTOM_RIGHT, Corner.BOTTOM_LEFT]
@@ -193,8 +204,11 @@ os.environ["DISPLAY"] = ":0"
 pygame.init()
 if DEPLOY == "pi":
     screen = pygame.display.set_mode(SIZE, FLAGS)
+    #pygame.mouse.set_visible(False)
 else:
     screen = pygame.display.set_mode((800,480))
+    #pygame.mouse.set_visible(True)
+    
 pygame.font.init()
 
 # DEBUG test file handling
@@ -202,7 +216,7 @@ pygame.font.init()
 #next_visit = get_next_visit_time()
 #print(days_until(next_visit))
 
-countdown = Countdown(screen)
+countdown = Countdown(screen, SIZE)
 
 # main loop
 state = State.RUN
